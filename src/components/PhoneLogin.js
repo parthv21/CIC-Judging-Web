@@ -1,28 +1,50 @@
 import React, { Component } from "react";
+import firebase from "firebase";
 import "firebase/database";
+import "firebase/auth";
 
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 
 import fireApp from "../base";
 import dbKeys from "../constants/realtimeDbKeys";
+import pathNames from "../constants/pathNames";
 import { validatePhoneNumber } from "../utils/validators";
 
 import "../styles/PhoneLogin.css";
 
 class PhoneLogin extends Component {
-  constructor() {
-    super();
+  constructor(props) {
+    super(props);
     this.state = {
       phoneNumber: "",
       otp: "",
       showOtp: false
     };
+    this.history = props.history;
     this.updatePhoneNumber = this.updatePhoneNumber.bind(this);
     this.updateOtpField = this.updateOtpField.bind(this);
     this.hideOtpField = this.hideOtpField.bind(this);
     this.submitPhoneNumber = this.submitPhoneNumber.bind(this);
     this.submitOtp = this.submitOtp.bind(this);
+  }
+
+  componentDidMount() {
+    window.recaptchaVerifier = new firebase.auth.RecaptchaVerifier(
+      "submit-btn",
+      {
+        size: "invisible",
+        callback: function(response) {
+          //reCAPTCHA solved, allow sign in with phone number.
+        },
+        "expired-callback": function() {
+          // Response expired. Ask user to solve reCAPTCHA again.
+        }
+      }
+    );
+    window.recaptchaVerifier.render().then(function(widgetId) {
+      window.recaptchaWidgetId = widgetId;
+    });
   }
 
   render() {
@@ -49,7 +71,11 @@ class PhoneLogin extends Component {
               value={phoneNumber}
               onChange={event => this.updatePhoneNumber(event)}
             />
-            <button className="login-buttons" onClick={this.submitPhoneNumber}>
+            <button
+              className="login-buttons"
+              id="submit-btn"
+              onClick={this.submitPhoneNumber}
+            >
               Submit
             </button>
           </div>
@@ -74,6 +100,7 @@ class PhoneLogin extends Component {
             </button>
           </div>
         )}
+        {/*<div ref={ref => (this.recaptcha = ref)}></div>*/}
       </div>
     );
   }
@@ -87,22 +114,38 @@ class PhoneLogin extends Component {
   };
 
   submitPhoneNumber = () => {
-    const phoneNumber = this.state.phoneNumber;
+    var phoneNumber = this.state.phoneNumber;
     const isValidPhoneNumber = validatePhoneNumber(phoneNumber);
     if (!isValidPhoneNumber) {
       alert("Please enter a valid phone number.");
     } else {
       const truncatedPhoneNumber = phoneNumber.slice(phoneNumber.length - 10);
+      var phoneLoginComponent = this;
       fireApp
         .database()
         .ref(dbKeys.judges)
         .child(truncatedPhoneNumber)
         .once("value", snapshot => {
           if (snapshot.exists()) {
-            this.setState(
-              { showOtp: true },
-              console.log("Will submit phone number")
-            );
+            phoneNumber.replace("[\\s\\-()]", "");
+            if (phoneNumber.length === 10) {
+              phoneNumber = "+1" + phoneNumber;
+            }
+            var appVerifier = window.recaptchaVerifier;
+            firebase
+              .auth()
+              .signInWithPhoneNumber(phoneNumber, appVerifier)
+              .then(function(confirmationResult) {
+                // SMS sent. Prompt user to type the code from the message, then sign the
+                // user in with confirmationResult.confirm(code).
+                window.confirmationResult = confirmationResult;
+                phoneLoginComponent.setState({ showOtp: true });
+              })
+              .catch(function(error) {
+                alert(error);
+                // Error; SMS not sent
+                // ...
+              });
           } else {
             alert("Please get yourself registered before trying to login.");
           }
@@ -112,6 +155,23 @@ class PhoneLogin extends Component {
 
   submitOtp = () => {
     console.log("Will submit OTP");
+    var code = this.state.otp;
+    var history = this.history;
+
+    window.confirmationResult
+      .confirm(code)
+      .then(function(result) {
+        // User signed in successfully.
+        var user = result.user;
+        console.log("User: ", user);
+        history.push(pathNames.teamList);
+        // ...
+      })
+      .catch(function(error) {
+        // User couldn't sign in (bad verification code?)
+        // ...
+        alert(error);
+      });
   };
 
   hideOtpField = () => {
