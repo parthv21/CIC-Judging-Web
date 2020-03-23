@@ -1,9 +1,14 @@
 import React, { Component } from "react";
-import "../styles/PhoneLogin.css";
+import "firebase/database";
+
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faArrowLeft } from "@fortawesome/free-solid-svg-icons";
 
+import fireApp from "../base";
+import dbKeys from "../constants/realtimeDbKeys";
 import { validatePhoneNumber } from "../utils/validators";
+
+import "../styles/PhoneLogin.css";
 
 class PhoneLogin extends Component {
   constructor() {
@@ -82,11 +87,26 @@ class PhoneLogin extends Component {
   };
 
   submitPhoneNumber = () => {
-    const isValidPhoneNumber = validatePhoneNumber(this.state.phoneNumber);
+    const phoneNumber = this.state.phoneNumber;
+    const isValidPhoneNumber = validatePhoneNumber(phoneNumber);
     if (!isValidPhoneNumber) {
       alert("Please enter a valid phone number.");
     } else {
-      this.setState({ showOtp: true }, console.log("Will submit phone number"));
+      const truncatedPhoneNumber = phoneNumber.slice(phoneNumber.length - 10);
+      fireApp
+        .database()
+        .ref(dbKeys.judges)
+        .child(truncatedPhoneNumber)
+        .once("value", snapshot => {
+          if (snapshot.exists()) {
+            this.setState(
+              { showOtp: true },
+              console.log("Will submit phone number")
+            );
+          } else {
+            alert("Please get yourself registered before trying to login.");
+          }
+        });
     }
   };
 

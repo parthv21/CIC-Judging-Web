@@ -1,9 +1,13 @@
 import React, { Component } from "react";
-import logo from "./logo.svg";
 import "./App.css";
-import Tabletop from "tabletop";
+import { BrowserRouter as Router, Route } from "react-router-dom";
 
+import pathNames from "./constants/pathNames";
+
+import { AuthProvider } from "./Auth";
+import PrivateRoute from "./PrivateRoute";
 import PhoneLogin from "./components/PhoneLogin";
+import TeamList from "./components/TeamList";
 
 class App extends Component {
   // constructor() {
@@ -26,7 +30,20 @@ class App extends Component {
   // }
 
   render() {
-    return <PhoneLogin />;
+    return (
+      <AuthProvider>
+        <Router>
+          <div>
+            <PrivateRoute
+              exact
+              path={pathNames.teamList}
+              component={TeamList}
+            />
+            <Route exact path={pathNames.login} component={PhoneLogin} />
+          </div>
+        </Router>
+      </AuthProvider>
+    );
   }
 }
 
